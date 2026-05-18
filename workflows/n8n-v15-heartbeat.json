@@ -1,0 +1,61 @@
+{
+  "name": "V15 Heartbeat",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "schedule",
+      "name": "Every 5 minutes"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.RAILWAY_APP_URL}}/api/scan",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "sde_auth={{$env.SESSION_SECRET}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "scan",
+      "name": "Force Scan"
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Force Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
