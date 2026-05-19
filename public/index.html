@@ -1,62 +1,94 @@
-<!doctype html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Dream Engine V15</title>
-<style>
-:root{--bg:#06070c;--panel:#10131f;--panel2:#161a2b;--text:#eaf0ff;--muted:#8f9bb8;--neon:#2af7ff;--green:#5cff9d;--red:#ff4c7a;--gold:#ffd36b}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top left,#19234a,#06070c 55%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui}
-.login{height:100vh;display:grid;place-items:center}.card{background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.035));border:1px solid rgba(255,255,255,.12);border-radius:28px;box-shadow:0 30px 80px rgba(0,0,0,.45);padding:26px}
-.login .card{width:min(440px,92vw)}h1{font-size:34px;margin:0 0 6px;letter-spacing:-1px}.sub{color:var(--muted);font-size:14px;margin-bottom:18px}
-input,button{border:0;border-radius:16px;padding:14px 16px;font-size:15px}input{width:100%;background:#080b13;color:var(--text);border:1px solid rgba(255,255,255,.14);outline:none}
-button{cursor:pointer;background:linear-gradient(90deg,var(--neon),#7c5cff);color:#02040a;font-weight:800}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.app{display:none;min-height:100vh}.top{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:18px 22px;background:rgba(6,7,12,.74);backdrop-filter:blur(18px);border-bottom:1px solid rgba(255,255,255,.08)}
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;padding:18px}.span3{grid-column:span 3}.span4{grid-column:span 4}.span6{grid-column:span 6}.span8{grid-column:span 8}.span12{grid-column:span 12}
-.metric{font-size:28px;font-weight:900}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.12em}.pill{padding:6px 9px;border-radius:99px;background:#0a0e18;border:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--muted)}
-.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--gold)}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}th{color:var(--muted);font-weight:700}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}.scroll{max-height:430px;overflow:auto}.actions button{margin:3px}.hero{background:linear-gradient(135deg,rgba(42,247,255,.13),rgba(124,92,255,.12));border-color:rgba(42,247,255,.22)}
-@media(max-width:900px){.span3,.span4,.span6,.span8{grid-column:span 12}.top{display:block}.row{margin-top:10px}}
-</style></head><body>
-<div id="loginBox" class="login"><div class="card">
-<h1>Dream Engine V15</h1><div class="sub">DFlow-ready Solana execution terminal · whale firehose · launch scanner</div>
-<input id="passwordInput" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"/><br/><br/>
-<button onclick="doLogin()" style="width:100%">Enter Terminal</button>
-<div id="loginMsg" class="sub"></div>
-</div></div>
-<div id="app" class="app">
-<div class="top"><div><b>⚡ Dream Engine V15</b> <span class="pill">DFlow / Jupiter / Dex / Wallet Firehose</span></div><div class="row actions">
-<button onclick="post('/api/start')">Start</button><button onclick="post('/api/scan')">Scan</button><button onclick="post('/api/poll')">Poll Wallets</button><button onclick="post('/api/payout')">Payout</button><button onclick="post('/api/panic')" style="background:linear-gradient(90deg,#ff4c7a,#ff9d4c)">PANIC</button><button onclick="post('/api/resume')">Resume</button></div></div>
-<div class="grid">
-<div class="card hero span12"><div class="label">Reality Check</div><div id="reality" class="metric">Loading...</div><div class="sub">If DRY_RUN=true, AUTO=false, or no hot wallet, no real trades will be sent. This terminal shows exact reasons.</div></div>
-<div class="card span3"><div class="label">Hot Wallet</div><div class="metric" id="bal">--</div><div class="sub mono" id="hot">--</div></div>
-<div class="card span3"><div class="label">Mode</div><div class="metric" id="mode">--</div><div class="sub" id="route">--</div></div>
-<div class="card span3"><div class="label">Stats</div><div class="metric" id="stats">--</div><div class="sub" id="stats2">--</div></div>
-<div class="card span3"><div class="label">Manual Buy Mint</div><input id="manualMint" placeholder="Token mint"/><br/><br/><button onclick="manualBuy()">Buy / Simulate</button></div>
-<div class="card span8"><div class="label">Candidates</div><div class="scroll"><table><thead><tr><th>Score</th><th>Token</th><th>Liq</th><th>Vol5</th><th>Age</th><th>Decision</th></tr></thead><tbody id="cands"></tbody></table></div></div>
-<div class="card span4"><div class="label">Alerts</div><div id="alerts" class="scroll"></div></div>
-<div class="card span6"><div class="label">Wallet Firehose Events</div><div class="scroll"><table><tbody id="events"></tbody></table></div></div>
-<div class="card span6"><div class="label">Trades</div><div class="scroll"><table><tbody id="trades"></tbody></table></div></div>
-</div></div>
-<script>
-async function doLogin(){
- const p=document.getElementById('passwordInput').value;
- const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:p})});
- if(r.ok){document.getElementById('loginBox').style.display='none';document.getElementById('app').style.display='block';load();setInterval(load,2500);}
- else document.getElementById('loginMsg').innerText='Bad password or server error';
-}
-async function post(path){ const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:'{}'}); const j=await r.json().catch(()=>({})); alert(JSON.stringify(j).slice(0,250)); load(); }
-async function manualBuy(){ const mint=document.getElementById('manualMint').value.trim(); if(!mint)return; const r=await fetch('/api/manual-buy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mint})}); alert(JSON.stringify(await r.json()).slice(0,250)); load(); }
-function money(n){return n==null?'--':'$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:0})}
-function small(s){return s?String(s).slice(0,6)+'...'+String(s).slice(-4):'none'}
-async function load(){
- const r=await fetch('/api/status'); if(!r.ok){return} const j=await r.json(), c=j.cfg, s=j.state;
- const blockers=[]; if(c.dryRun)blockers.push('DRY_RUN'); if(!c.autoTrading)blockers.push('AUTO OFF'); if(!c.hotWallet)blockers.push('NO HOT WALLET'); if(c.panic)blockers.push('PANIC');
- document.getElementById('reality').innerHTML=blockers.length?'<span class="warn">Not real trading: '+blockers.join(' · ')+'</span>':'<span class="good">REAL AUTO MODE ACTIVE</span>';
- document.getElementById('bal').innerText=(c.hotBalanceSol??'--')+' SOL'; document.getElementById('hot').innerText='hot '+small(c.hotWallet)+' | payout '+small(c.payoutWallet);
- document.getElementById('mode').innerHTML=(c.dryRun?'<span class="warn">DRY</span>':'<span class="good">REAL</span>')+' / '+(c.autoTrading?'AUTO':'MANUAL');
- document.getElementById('route').innerText='DFlow '+(c.dflow?'ON':'OFF')+' · max '+c.maxTradeSol+' SOL';
- document.getElementById('stats').innerText=s.stats.scans+' scans';
- document.getElementById('stats2').innerText=s.stats.txProcessed+' tx · '+s.stats.missedCaught+' caught · '+s.stats.rpc429+' 429';
- document.getElementById('cands').innerHTML=(s.candidates||[]).map(x=>`<tr><td>${x.score}</td><td><a href="${x.url||'#'}" target="_blank">${x.symbol||'?'} </a><br><span class="mono">${small(x.baseMint)}</span></td><td>${money(x.liq)}</td><td>${money(x.vol5)}</td><td>${Math.round(x.ageMin||0)}m</td><td class="${x.accepted?'good':'bad'}">${x.accepted?'ACCEPT':'REJECT'}<br><span class="sub">${(x.reasons||[]).join(', ')}</span></td></tr>`).join('');
- document.getElementById('alerts').innerHTML=(s.alerts||[]).map(a=>`<div style="padding:9px;border-bottom:1px solid rgba(255,255,255,.08)"><b>${a.icon} ${a.title}</b><br><span class="sub">${a.t}</span><br>${a.msg}</div>`).join('');
- document.getElementById('events').innerHTML=(s.events||[]).map(e=>`<tr><td>${e.type}</td><td class="mono">${small(e.wallet)}</td><td class="mono">${small(e.mint)}</td><td>${Number(e.amount).toFixed(4)}</td></tr>`).join('');
- document.getElementById('trades').innerHTML=(s.trades||[]).map(t=>`<tr><td>${t.status||t.mode}</td><td>${t.symbol}</td><td>${t.amountSol} SOL</td><td>${t.route}</td><td>${t.reason}</td></tr>`).join('');
-}
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Apex Engine V18 | Live</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #050505; color: #f3f4f6; font-family: 'Inter', system-ui, sans-serif; }
+    .glass-panel { background: #111111; border: 1px solid #262626; border-radius: 12px; }
+    .scroll-area { max-height: 500px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #404040 transparent; }
+    .neon-text { text-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/95 backdrop-blur-md">
+    <div class="glass-panel p-8 w-full max-w-sm flex flex-col items-center">
+      <h1 class="text-2xl font-bold neon-text text-yellow-400 mb-2">APEX ENGINE V18</h1>
+      <input id="pwd" type="password" placeholder="Terminal Password" class="w-full bg-[#0a0a0a] border border-gray-800 rounded px-4 py-3 text-white focus:outline-none focus:border-yellow-500 transition mb-4 text-center tracking-widest" onkeypress="if(event.key==='Enter') login()">
+      <button onclick="login()" class="w-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/50 rounded py-3 hover:bg-yellow-500/20 font-bold transition">DECRYPT TERMINAL</button>
+    </div>
+  </div>
+
+  <div id="mainApp" class="hidden flex-1 flex-col gap-6 p-4 md:p-8">
+    <header class="glass-panel p-6 flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-extrabold neon-text text-yellow-400">APEX ENGINE V18</h1>
+        <p class="text-sm text-gray-400 mt-1">Status: <span id="pulseText" class="text-red-500">STANDBY</span></p>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="api('/api/start')" class="px-6 py-2 bg-yellow-500/10 text-yellow-500 border border-yellow-500/50 rounded hover:bg-yellow-500/20 font-bold">ARM</button>
+        <button onclick="api('/api/stop')" class="px-6 py-2 bg-red-900/30 text-red-400 border border-red-800 rounded hover:bg-red-900/50 font-bold">HALT</button>
+      </div>
+    </header>
+
+    <div class="glass-panel flex-1 flex flex-col">
+      <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-[#0a0a0a]">
+        <h2 class="font-bold text-white flex items-center gap-2">
+          <span id="statusIndicator" class="h-3 w-3 rounded-full bg-gray-600"></span>
+          System Logs (Updated: <span id="lastUpdated">-</span>)
+        </h2>
+      </div>
+      <div id="logStream" class="flex-1 scroll-area p-4 font-mono text-sm flex flex-col gap-2"></div>
+    </div>
+  </div>
+
+  <script>
+    async function login() {
+      const pwd = document.getElementById('pwd').value;
+      const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: pwd}) });
+      if (res.ok) {
+        document.getElementById('authOverlay').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        document.getElementById('mainApp').classList.add('flex');
+        setInterval(fetchLogs, 2000);
+        fetchLogs();
+      }
+    }
+
+    async function api(endpoint) { await fetch(endpoint, { method: 'POST' }); fetchLogs(); }
+
+    async function fetchLogs() {
+      const res = await fetch('/api/status');
+      if (!res.ok) return;
+      const { state } = await res.json();
+      
+      // Update Heartbeat/Status
+      const indicator = document.getElementById('statusIndicator');
+      const pulseText = document.getElementById('pulseText');
+      if (state.running) {
+        indicator.className = "h-3 w-3 rounded-full bg-emerald-500 animate-pulse";
+        pulseText.innerText = "ACTIVE - SCANNING";
+        pulseText.className = "text-emerald-500";
+      } else {
+        indicator.className = "h-3 w-3 rounded-full bg-red-500";
+        pulseText.innerText = "STANDBY";
+        pulseText.className = "text-red-500";
+      }
+      
+      document.getElementById('lastUpdated').innerText = new Date().toLocaleTimeString();
+
+      // Update Logs
+      const logStream = document.getElementById('logStream');
+      logStream.innerHTML = state.logs.map(log => `
+        <div class="p-2 bg-[#0a0a0a] rounded border border-gray-800/50 flex gap-4">
+          <span class="text-gray-500 shrink-0">[${new Date(log.time).toLocaleTimeString()}]</span>
+          <span class="text-gray-500 font-bold">${log.type}</span>
+          <span class="text-gray-300">${log.msg}</span>
+        </div>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
