@@ -1,94 +1,19 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Apex Engine V18 | Live</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background-color: #050505; color: #f3f4f6; font-family: 'Inter', system-ui, sans-serif; }
-    .glass-panel { background: #111111; border: 1px solid #262626; border-radius: 12px; }
-    .scroll-area { max-height: 500px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #404040 transparent; }
-    .neon-text { text-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
-  </style>
-</head>
-<body class="min-h-screen flex flex-col antialiased">
-
-  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/95 backdrop-blur-md">
-    <div class="glass-panel p-8 w-full max-w-sm flex flex-col items-center">
-      <h1 class="text-2xl font-bold neon-text text-yellow-400 mb-2">APEX ENGINE V18</h1>
-      <input id="pwd" type="password" placeholder="Terminal Password" class="w-full bg-[#0a0a0a] border border-gray-800 rounded px-4 py-3 text-white focus:outline-none focus:border-yellow-500 transition mb-4 text-center tracking-widest" onkeypress="if(event.key==='Enter') login()">
-      <button onclick="login()" class="w-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/50 rounded py-3 hover:bg-yellow-500/20 font-bold transition">DECRYPT TERMINAL</button>
-    </div>
-  </div>
-
-  <div id="mainApp" class="hidden flex-1 flex-col gap-6 p-4 md:p-8">
-    <header class="glass-panel p-6 flex justify-between items-center">
-      <div>
-        <h1 class="text-3xl font-extrabold neon-text text-yellow-400">APEX ENGINE V18</h1>
-        <p class="text-sm text-gray-400 mt-1">Status: <span id="pulseText" class="text-red-500">STANDBY</span></p>
-      </div>
-      <div class="flex gap-3">
-        <button onclick="api('/api/start')" class="px-6 py-2 bg-yellow-500/10 text-yellow-500 border border-yellow-500/50 rounded hover:bg-yellow-500/20 font-bold">ARM</button>
-        <button onclick="api('/api/stop')" class="px-6 py-2 bg-red-900/30 text-red-400 border border-red-800 rounded hover:bg-red-900/50 font-bold">HALT</button>
-      </div>
-    </header>
-
-    <div class="glass-panel flex-1 flex flex-col">
-      <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-[#0a0a0a]">
-        <h2 class="font-bold text-white flex items-center gap-2">
-          <span id="statusIndicator" class="h-3 w-3 rounded-full bg-gray-600"></span>
-          System Logs (Updated: <span id="lastUpdated">-</span>)
-        </h2>
-      </div>
-      <div id="logStream" class="flex-1 scroll-area p-4 font-mono text-sm flex flex-col gap-2"></div>
-    </div>
-  </div>
-
-  <script>
-    async function login() {
-      const pwd = document.getElementById('pwd').value;
-      const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: pwd}) });
-      if (res.ok) {
-        document.getElementById('authOverlay').classList.add('hidden');
-        document.getElementById('mainApp').classList.remove('hidden');
-        document.getElementById('mainApp').classList.add('flex');
-        setInterval(fetchLogs, 2000);
-        fetchLogs();
-      }
-    }
-
-    async function api(endpoint) { await fetch(endpoint, { method: 'POST' }); fetchLogs(); }
-
-    async function fetchLogs() {
-      const res = await fetch('/api/status');
-      if (!res.ok) return;
-      const { state } = await res.json();
-      
-      // Update Heartbeat/Status
-      const indicator = document.getElementById('statusIndicator');
-      const pulseText = document.getElementById('pulseText');
-      if (state.running) {
-        indicator.className = "h-3 w-3 rounded-full bg-emerald-500 animate-pulse";
-        pulseText.innerText = "ACTIVE - SCANNING";
-        pulseText.className = "text-emerald-500";
-      } else {
-        indicator.className = "h-3 w-3 rounded-full bg-red-500";
-        pulseText.innerText = "STANDBY";
-        pulseText.className = "text-red-500";
-      }
-      
-      document.getElementById('lastUpdated').innerText = new Date().toLocaleTimeString();
-
-      // Update Logs
-      const logStream = document.getElementById('logStream');
-      logStream.innerHTML = state.logs.map(log => `
-        <div class="p-2 bg-[#0a0a0a] rounded border border-gray-800/50 flex gap-4">
-          <span class="text-gray-500 shrink-0">[${new Date(log.time).toLocaleTimeString()}]</span>
-          <span class="text-gray-500 font-bold">${log.type}</span>
-          <span class="text-gray-300">${log.msg}</span>
+<script>
+  let lastLogCount = 0;
+  async function fetchLogs() {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    if (data.state.logs.length !== lastLogCount) {
+      const container = document.getElementById('logStream');
+      container.innerHTML = data.state.logs.map(log => `
+        <div class="border-b border-gray-800 p-2 text-xs font-mono">
+          <span class="text-gray-500">${new Date(log.time).toLocaleTimeString()}</span>
+          <span class="${log.type === 'TRADE' ? 'text-green-400' : 'text-yellow-400'}"> [${log.type}] </span>
+          ${log.msg}
         </div>
       `).join('');
+      lastLogCount = data.state.logs.length;
     }
-  </script>
-</body>
-</html>
+  }
+  setInterval(fetchLogs, 1000); // UI updates 10x faster
+</script>
