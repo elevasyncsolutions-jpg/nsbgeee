@@ -118,36 +118,39 @@ async function checkAndSweepProfits() {
 }
 
 async function scanMarket() {
-  logEngine("Checking DexScreener...", "SCAN"); // This will show up every 15 seconds
+  // This log will now appear every 15 seconds in your UI, confirming it is alive
+  logEngine("Scan cycle active. Checking DexScreener...", "SCAN"); 
+  
   try {
     const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=solana");
     const data = await res.json();
     
-    // Loosened the filter from 1000 to 100 to get more candidates
+    // We lowered the volume filter to 100 to increase the chance of finding results
     const pairs = (data.pairs || []).filter(p => p.chainId === "solana" && p.volume?.m5 > 100);
     
     if (pairs.length === 0) {
-      logEngine("Market quiet: No pairs met volume criteria.", "INFO");
+      logEngine("Market quiet: No pairs found above volume threshold.", "INFO");
       return;
     }
 
-    logEngine(`Found ${pairs.length} candidates. Analyzing...`, "SCAN");
+    logEngine(`Scan complete: Analyzed ${pairs.length} pairs.`, "SCAN");
 
-    for (const p of pairs.slice(0, 3)) {
+    for (const p of pairs.slice(0, 5)) {
       const vol5 = Number(p.volume?.m5 || 1);
       const vol1 = Number(p.volume?.m1 || 0); 
       
-      // Changed 0.4 to 0.1 to be less picky
+      // Using 0.1 (10%) threshold to be less picky and catch more spikes
       if (vol1 > (vol5 * 0.1)) {
-        logEngine(`Volume Spike: ${p.baseToken.symbol}`, "ALERT");
+        logEngine(`Volume Spike Detected: ${p.baseToken.symbol}`, "ALERT");
         const isSafe = await validateWithGroq(p);
         if (isSafe) {
-          logEngine(`Groq Cleared ${p.baseToken.symbol}. Executing...`, "TRADE");
+          logEngine(`Groq Cleared ${p.baseToken.symbol}. Executing strategy...`, "TRADE");
         } else {
-          logEngine(`Groq Rejected ${p.baseToken.symbol}.`, "WARN");
+          logEngine(`Groq Rejected ${p.baseToken.symbol}. Skipping.`, "WARN");
         }
       }
     }
+    await checkAndSweepProfits();
   } catch (e) {
     logEngine("Scan Error: " + e.message, "ERROR");
   }
