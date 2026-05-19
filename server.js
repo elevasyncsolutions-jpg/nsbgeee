@@ -118,39 +118,36 @@ async function checkAndSweepProfits() {
 }
 
 async function scanMarket() {
-  // HEARTBEAT LOG: This confirms the interval loop is running
-  console.log(`[${new Date().toLocaleTimeString()}] Engine Heartbeat: Scanning...`);
-  
+  logEngine("Checking DexScreener...", "SCAN"); // This will show up every 15 seconds
   try {
     const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=solana");
     const data = await res.json();
     
-    // Using a broader filter to ensure you see results
+    // Loosened the filter from 1000 to 100 to get more candidates
     const pairs = (data.pairs || []).filter(p => p.chainId === "solana" && p.volume?.m5 > 100);
     
     if (pairs.length === 0) {
-      logEngine("Scan complete: No high-volume tokens found. Waiting...", "INFO");
+      logEngine("Market quiet: No pairs met volume criteria.", "INFO");
       return;
     }
 
-    logEngine(`Scan complete: Found ${pairs.length} candidates.`, "SCAN");
-    
-    // Process top 3
+    logEngine(`Found ${pairs.length} candidates. Analyzing...`, "SCAN");
+
     for (const p of pairs.slice(0, 3)) {
       const vol5 = Number(p.volume?.m5 || 1);
       const vol1 = Number(p.volume?.m1 || 0); 
       
+      // Changed 0.4 to 0.1 to be less picky
       if (vol1 > (vol5 * 0.1)) {
-        logEngine(`Candidate Found: ${p.baseToken.symbol}. Auditing...`, "ALERT");
+        logEngine(`Volume Spike: ${p.baseToken.symbol}`, "ALERT");
         const isSafe = await validateWithGroq(p);
         if (isSafe) {
-          logEngine(`Groq Cleared ${p.baseToken.symbol}. Strategy active.`, "TRADE");
+          logEngine(`Groq Cleared ${p.baseToken.symbol}. Executing...`, "TRADE");
         } else {
-          logEngine(`Groq flagged ${p.baseToken.symbol} as high risk.`, "WARN");
+          logEngine(`Groq Rejected ${p.baseToken.symbol}.`, "WARN");
         }
       }
     }
-    await checkAndSweepProfits();
   } catch (e) {
     logEngine("Scan Error: " + e.message, "ERROR");
   }
