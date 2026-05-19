@@ -118,29 +118,33 @@ async function checkAndSweepProfits() {
 }
 
 async function scanMarket() {
-  logEngine("Scanning for high-velocity candidates...", "SCAN");
+  // HEARTBEAT LOG: This confirms the interval loop is running
+  console.log(`[${new Date().toLocaleTimeString()}] Engine Heartbeat: Scanning...`);
+  
   try {
     const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=solana");
     const data = await res.json();
     
-    // RELAXED FILTER: Lowered volume requirements so it actually finds tokens
+    // Using a broader filter to ensure you see results
     const pairs = (data.pairs || []).filter(p => p.chainId === "solana" && p.volume?.m5 > 100);
     
     if (pairs.length === 0) {
-      logEngine("No high-volume tokens found yet. Waiting for liquidity...", "INFO");
+      logEngine("Scan complete: No high-volume tokens found. Waiting...", "INFO");
       return;
     }
 
+    logEngine(`Scan complete: Found ${pairs.length} candidates.`, "SCAN");
+    
+    // Process top 3
     for (const p of pairs.slice(0, 3)) {
       const vol5 = Number(p.volume?.m5 || 1);
       const vol1 = Number(p.volume?.m1 || 0); 
       
-      // RELAXED ACCELERATION: Changed 0.4 to 0.1 to catch emerging spikes earlier
       if (vol1 > (vol5 * 0.1)) {
-        logEngine(`Candidate Found: ${p.baseToken.symbol}. Auditing with Groq...`, "ALERT");
+        logEngine(`Candidate Found: ${p.baseToken.symbol}. Auditing...`, "ALERT");
         const isSafe = await validateWithGroq(p);
         if (isSafe) {
-          logEngine(`Groq Cleared ${p.baseToken.symbol}. Logic ready to trade.`, "TRADE");
+          logEngine(`Groq Cleared ${p.baseToken.symbol}. Strategy active.`, "TRADE");
         } else {
           logEngine(`Groq flagged ${p.baseToken.symbol} as high risk.`, "WARN");
         }
