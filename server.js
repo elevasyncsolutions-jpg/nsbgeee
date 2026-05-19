@@ -118,41 +118,36 @@ async function checkAndSweepProfits() {
 }
 
 async function scanMarket() {
-  // This log will now appear every 15 seconds in your UI, confirming it is alive
-  logEngine("Scan cycle active. Checking DexScreener...", "SCAN"); 
-  
+  logEngine("Heartbeat: Checking market for all activity...", "SCAN");
   try {
     const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=solana");
     const data = await res.json();
     
-    // We lowered the volume filter to 100 to increase the chance of finding results
-    const pairs = (data.pairs || []).filter(p => p.chainId === "solana" && p.volume?.m5 > 100);
+    // REMOVED THE >1000 FILTER: Now it checks everything found
+    const pairs = (data.pairs || []).filter(p => p.chainId === "solana");
     
     if (pairs.length === 0) {
-      logEngine("Market quiet: No pairs found above volume threshold.", "INFO");
+      logEngine("No tokens found. Refreshing...", "INFO");
       return;
     }
 
-    logEngine(`Scan complete: Analyzed ${pairs.length} pairs.`, "SCAN");
+    logEngine(`Scanning ${pairs.length} tokens...`, "SCAN");
 
-    for (const p of pairs.slice(0, 5)) {
-      const vol5 = Number(p.volume?.m5 || 1);
-      const vol1 = Number(p.volume?.m1 || 0); 
-      
-      // Using 0.1 (10%) threshold to be less picky and catch more spikes
-      if (vol1 > (vol5 * 0.1)) {
-        logEngine(`Volume Spike Detected: ${p.baseToken.symbol}`, "ALERT");
+    for (const p of pairs.slice(0, 3)) {
+        // Logging every single token found so you KNOW it's working
+        logEngine(`Analyzing: ${p.baseToken.symbol} | Vol: ${p.volume?.m5}`, "ANALYSIS");
+        
+        // Removed the strict volume acceleration check temporarily 
+        // to see if the engine triggers on ANY token
+        logEngine(`Groq auditing ${p.baseToken.symbol}...`, "ALERT");
         const isSafe = await validateWithGroq(p);
+        
         if (isSafe) {
-          logEngine(`Groq Cleared ${p.baseToken.symbol}. Executing strategy...`, "TRADE");
-        } else {
-          logEngine(`Groq Rejected ${p.baseToken.symbol}. Skipping.`, "WARN");
+          logEngine(`SAFE: ${p.baseToken.symbol} ready for trade.`, "TRADE");
         }
-      }
     }
-    await checkAndSweepProfits();
   } catch (e) {
-    logEngine("Scan Error: " + e.message, "ERROR");
+    logEngine("Error: " + e.message, "ERROR");
   }
 }
 
